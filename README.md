@@ -92,18 +92,18 @@ example, 052 builds on 005, 023, and 047).
 | 011 | [first-success](011-first-success/README.md) | Fan-out to providers, return the first success, cancel losers | easy |
 | 012 | [timeout-wrapper](012-timeout-wrapper/README.md) | Per-call deadline that respects parent cancellation | easy |
 | 013 | quorum-read | Wait for N of M agreeing responses with early exit | medium |
-| 014 | hedged-request | Send a backup request after a delay, keep the first answer | medium |
+| 014 | [hedged-request](014-hedged-request/README.md) | Send a backup request after a delay, keep the first answer | medium |
 | 015 | scatter-gather | Collect partial results until a deadline | medium |
-| 016 | deadline-budget | Split the remaining time budget across sequential calls | medium |
+| 016 | [deadline-budget](016-deadline-budget/README.md) | Split the remaining time budget across sequential calls | medium |
 
 ### Failure handling
 
 | # | Task | What you build | Difficulty |
 |---|---|---|---|
 | 017 | [retry-backoff](017-retry-backoff/README.md) | Retries with classification and context-aware backoff | easy |
-| 018 | retry-budget | Limit retries to a share of traffic to prevent retry storms | medium |
+| 018 | [retry-budget](018-retry-budget/README.md) | Limit retries to a share of traffic to prevent retry storms | medium |
 | 019 | [circuit-breaker](019-circuit-breaker/README.md) | Closed / open / half-open breaker with a single probe | hard |
-| 020 | bulkhead | Per-dependency concurrency isolation | medium |
+| 020 | [bulkhead](020-bulkhead/README.md) | Per-dependency concurrency isolation | medium |
 | 021 | fallback-chain | Primary, secondary, and stale-cache fallbacks | medium |
 | 022 | health-checker | Active probes with hysteresis against flapping | medium |
 
@@ -116,17 +116,17 @@ example, 052 builds on 005, 023, and 047).
 | 025 | [idempotent-commands](025-idempotent-commands/README.md) | Command IDs with stored outcomes and payload conflicts | hard |
 | 026 | dedup-window | Bounded seen-set of message IDs with expiry | medium |
 | 027 | reorder-buffer | Deliver out-of-order sequence numbers in order, with gap timeout | medium |
-| 028 | ordered-parallel | Process in parallel, emit in input order, bounded window | hard |
+| 028 | [ordered-parallel](028-ordered-parallel/README.md) | Process in parallel, emit in input order, bounded window | hard |
 
 ### Rate limiting and flow control
 
 | # | Task | What you build | Difficulty |
 |---|---|---|---|
-| 029 | token-bucket | Token bucket with blocking and non-blocking acquire | easy |
+| 029 | [token-bucket](029-token-bucket/README.md) | Token bucket with blocking and non-blocking acquire | easy |
 | 030 | sliding-window-limiter | Request limit over a sliding time window | medium |
 | 031 | fair-queue | Per-tenant fair scheduling (deficit round robin) | hard |
-| 032 | adaptive-concurrency | Concurrency limit that adapts to latency (AIMD) | hard |
-| 033 | load-shedder | Reject work by queueing time before it overloads the service | medium |
+| 032 | [adaptive-concurrency](032-adaptive-concurrency/README.md) | Concurrency limit that adapts to latency (AIMD) | hard |
+| 033 | [load-shedder](033-load-shedder/README.md) | Reject work by queueing time before it overloads the service | medium |
 | 034 | priority-admission | Reserve capacity for high-priority requests | medium |
 
 ### Caching
@@ -136,9 +136,9 @@ example, 052 builds on 005, 023, and 047).
 | 035 | lru-cache | Concurrent LRU cache | easy |
 | 036 | ttl-cache | Cache with lazy and active expiry | medium |
 | 037 | loading-cache | Cache that loads misses once and caches errors briefly | medium |
-| 038 | stale-while-revalidate | Serve stale values while refreshing in the background | medium |
+| 038 | [stale-while-revalidate](038-stale-while-revalidate/README.md) | Serve stale values while refreshing in the background | medium |
 | 039 | sharded-cache | Lock striping for a read-heavy cache | medium |
-| 040 | write-behind-cache | Buffer writes and persist them asynchronously | hard |
+| 040 | [write-behind-cache](040-write-behind-cache/README.md) | Buffer writes and persist them asynchronously | hard |
 
 ### Scheduling and time
 
@@ -167,7 +167,7 @@ example, 052 builds on 005, 023, and 047).
 | # | Task | What you build | Difficulty |
 |---|---|---|---|
 | 053 | [lease-fencing](053-lease-fencing/README.md) | Job leases with generations that fence stale workers | medium |
-| 054 | lease-worker | Background lease renewal, stop work when the lease is lost | hard |
+| 054 | [lease-worker](054-lease-worker/README.md) | Background lease renewal, stop work when the lease is lost | hard |
 | 055 | leader-election | Leader election over a compare-and-set store with TTL | hard |
 | 056 | lock-client | Distributed lock client with renewal and fencing tokens | hard |
 | 057 | failure-detector | Heartbeats with suspicion timeouts | medium |
@@ -178,7 +178,7 @@ example, 052 builds on 005, 023, and 047).
 
 | # | Task | What you build | Difficulty |
 |---|---|---|---|
-| 060 | offset-committer | Parallel processing, commit only the contiguous done prefix | hard |
+| 060 | [offset-committer](060-offset-committer/README.md) | Parallel processing, commit only the contiguous done prefix | hard |
 | 061 | redelivery-tracker | Visibility timeouts, ack and nack | medium |
 | 062 | dead-letter | Attempt counting and poison-message handling | medium |
 | 063 | outbox-relay | Publish stored events at least once, in order | medium |
@@ -201,7 +201,7 @@ example, 052 builds on 005, 023, and 047).
 
 | # | Task | What you build | Difficulty |
 |---|---|---|---|
-| 073 | connection-pool | Pool with limits, health checks, idle eviction, cancellable wait | hard |
+| 073 | [connection-pool](073-connection-pool/README.md) | Pool with limits, health checks, idle eviction, cancellable wait | hard |
 | 074 | request-multiplexer | Many concurrent requests over one connection | hard |
 | 075 | p2c-balancer | Power-of-two-choices load balancing | medium |
 | 076 | resolver-cache | Background refresh that keeps the last good answer | medium |
@@ -212,7 +212,7 @@ example, 052 builds on 005, 023, and 047).
 
 | # | Task | What you build | Difficulty |
 |---|---|---|---|
-| 079 | dag-executor | Run tasks after their dependencies, cancel downstream on failure | hard |
+| 079 | [dag-executor](079-dag-executor/README.md) | Run tasks after their dependencies, cancel downstream on failure | hard |
 | 080 | step-executor | Workflow steps with futures, dedup, retries, and shutdown | hard |
 | 081 | saga | Multi-step operation with compensations | hard |
 | 082 | durable-workflow | Persist step results and resume after a crash | hard |
