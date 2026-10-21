@@ -284,6 +284,16 @@ func assertRunning(t *testing.T, ch <-chan error, what string) {
 	}
 }
 
+func receiveSignal(t *testing.T, ch <-chan struct{}, what string) {
+	t.Helper()
+	synctest.Wait()
+	select {
+	case <-ch:
+	default:
+		t.Fatalf("%s: signal was not received", what)
+	}
+}
+
 // stop cancels Run, expects it to return context.Canceled, and checks that
 // every claimed job was reported.
 func stop(t *testing.T, s *fakeStore, cancel context.CancelFunc, done <-chan error) {
@@ -705,6 +715,114 @@ func TestHandlerErrorStopsRenewalWithoutComplete(t *testing.T) {
 		}
 
 		stop(t, s, cancel, done)
+	})
+}
+
+func TestHandlerReturnCancelsAndWaitsForInFlightRenew(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		s := newFakeStore(t, 10*time.Second)
+		s.claimFn = serve(claim{Job{ID: "job-1"}, 6})
+
+		renewStarted := make(chan struct{}, 1)
+		renewCancelled := make(chan struct{}, 1)
+		releaseRenew := make(chan struct{})
+		s.renewFn = func(ctx context.Context, _ string, _ int) error {
+			renewStarted <- struct{}{}
+			<-ctx.Done()
+			renewCancelled <- struct{}{}
+			<-releaseRenew
+			return nil
+		}
+
+		w := mustNew(t, s, 3*time.Second, time.Minute)
+		handlerReturn := make(chan struct{})
+		ctx, cancel := context.WithCancel(context.Background())
+		done := goRun(w, ctx, handlerFunc(func(context.Context, Job) ([]byte, error) {
+			<-handlerReturn
+			return []byte("result"), nil
+		}))
+
+		time.Sleep(3 * time.Second)
+		receiveSignal(t, renewStarted, "after the first renewal tick")
+		close(handlerReturn)
+		receiveSignal(t, renewCancelled, "after the handler returned")
+
+		assertRunning(t, done, "while Renew is still running")
+		if got := s.completions("job-1"); len(got) != 0 {
+			t.Fatalf("Complete called while Renew was still running: %+v", got)
+		}
+		if outcomes := s.reported(); len(outcomes) != 0 {
+			t.Fatalf("reported %d outcomes while Renew was still running, want 0", len(outcomes))
+		}
+		if claims := s.times("claim", ""); len(claims) != 1 {
+			t.Fatalf("Claim called %d times while Renew was still running, want 1", len(claims))
+		}
+
+		close(releaseRenew)
+		synctest.Wait()
+
+		got := s.completions("job-1")
+		if len(got) != 1 || got[0].result != "result" {
+			t.Fatalf("completions = %+v, want one completion with the handler result", got)
+		}
+		outcomes := s.reported()
+		if len(outcomes) != 1 {
+			t.Fatalf("reported %d outcomes after Renew returned, want 1", len(outcomes))
+		}
+		assertOutcome(t, outcomes[0], "job-1", 6, nil)
+
+		stop(t, s, cancel, done)
+	})
+}
+
+func TestRunCancellationWaitsForInFlightRenew(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		s := newFakeStore(t, 10*time.Second)
+		s.claimFn = serve(claim{Job{ID: "job-1"}, 8})
+
+		renewStarted := make(chan struct{}, 1)
+		renewCancelled := make(chan struct{}, 1)
+		releaseRenew := make(chan struct{})
+		s.renewFn = func(ctx context.Context, _ string, _ int) error {
+			renewStarted <- struct{}{}
+			<-ctx.Done()
+			renewCancelled <- struct{}{}
+			<-releaseRenew
+			return ctx.Err()
+		}
+
+		w := mustNew(t, s, 3*time.Second, time.Minute)
+		ctx, cancel := context.WithCancel(context.Background())
+		done := goRun(w, ctx, handlerFunc(func(ctx context.Context, _ Job) ([]byte, error) {
+			<-ctx.Done()
+			return nil, ctx.Err()
+		}))
+
+		time.Sleep(3 * time.Second)
+		receiveSignal(t, renewStarted, "after the first renewal tick")
+		cancel()
+		receiveSignal(t, renewCancelled, "after Run's context was cancelled")
+
+		assertRunning(t, done, "while Renew is still running after cancellation")
+		if got := s.completions("job-1"); len(got) != 0 {
+			t.Fatalf("Complete called after Run cancellation: %+v", got)
+		}
+		if outcomes := s.reported(); len(outcomes) != 0 {
+			t.Fatalf("reported %d outcomes while Renew was still running, want 0", len(outcomes))
+		}
+
+		close(releaseRenew)
+		if err := receive(t, done, "after Renew returned"); !errors.Is(err, context.Canceled) {
+			t.Fatalf("Run returned %v, want context.Canceled", err)
+		}
+		if claims := s.times("claim", ""); len(claims) != 1 {
+			t.Fatalf("Claim called %d times, want 1: no Claim after Run cancellation", len(claims))
+		}
+		outcomes := s.reported()
+		if len(outcomes) != 1 {
+			t.Fatalf("reported %d outcomes before Run returned, want 1", len(outcomes))
+		}
+		assertOutcome(t, outcomes[0], "job-1", 8, context.Canceled)
 	})
 }
 

@@ -5,10 +5,16 @@
 ## Test coverage notes
 
 - **Renewal is signalled to stop but not waited for before `Complete`,** so a
-  `Renew` already past its `select` overlaps or follows `Complete`. Caught only
-  sometimes, by `TestNoRenewOverlapsOrFollowsComplete` (handler return and a
-  renewal tick coincide for 20 jobs) and by the fake store's per-call checks in
-  every test, when the scheduler interleaves badly; look for it in review.
+  `Renew` already past its `select` overlaps or follows `Complete`. Caught by
+  `TestHandlerReturnCancelsAndWaitsForInFlightRenew` (a `Renew` blocked after
+  its context was cancelled: `Complete`, the outcome, or the next `Claim`
+  happen while it is still running) and, when the scheduler interleaves badly,
+  by `TestNoRenewOverlapsOrFollowsComplete` and the fake store's per-call
+  checks.
+- **`Run` returns, or reports the outcome, after cancellation while a `Renew`
+  is still in flight.** Caught by `TestRunCancellationWaitsForInFlightRenew`
+  (`Run` returned, or an outcome was reported, before the blocked `Renew` came
+  back).
 - **A result is completed after the lease was lost,** because the decision
   looks only at the handler's error. Caught by
   `TestStaleHandlerResultIsNeverCompleted` (lost via `ErrLeaseLost`) and
@@ -69,6 +75,12 @@
 
 ## Open choices
 
+- A `Renew` that was cancelled because the handler returned may still come
+  back with `ErrLeaseLost`. Treating it as a loss (no `Complete`, outcome
+  `ErrLeaseLost`) follows the README literally; ignoring it and letting the
+  store fence `Complete` gives the same outcome at the cost of one call. Both
+  are safe, no test distinguishes them; any consistent choice is fine if the
+  user can say why neither can complete a job another worker owns.
 - Whether a result that arrives after `ctx` was cancelled is completed or
   abandoned is the solver's choice, and so is the context `Complete` gets in
   that case. `TestCancellationCancelsJobAndWaitsForHandler` accepts either
