@@ -63,8 +63,21 @@ func (w *Worker) Run(ctx context.Context, handler Handler) error
 - If `Renew` returns an error matching `ErrLeaseLost`, the lease is lost.
 - Any other `Renew` error is not fatal: the next renewal tries again. If the
   local lease deadline is reached first — because `Renew` keeps failing or a
-  call hangs — the lease is lost at that moment, not earlier. A lost lease
-  stays lost, even if a `Renew` issued earlier succeeds afterwards.
+  call hangs — the lease is lost at that moment, not earlier.
+- The deadline is hard because at that moment the worker has no confirmation
+  that the store still considers the lease held, and it cannot wait for one:
+  the handler writes to systems that know nothing about leases, and every
+  second without confirmation may be a second of running concurrently with
+  the job's next owner. Abandoning the work is safe; continuing is not.
+- A successful `Renew` proves that the store never let the lease lapse up to
+  that call, whenever its response arrives. A success that has already been
+  received when the deadline is reached therefore extends the lease; it must
+  not be discarded because a timer fired at the same moment. Only a success
+  that arrives after the job context has been cancelled is ignored: a lost
+  lease stays lost, because the cancellation sent to the handler cannot be
+  taken back. That job will be redone by whoever claims it after the lease
+  expires. This waste is the price of the hard deadline; keeping `renewEvery`
+  and the per-call `Renew` timeout small relative to `lease` makes it rare.
 - When the lease is lost, renewal stops, no further `Renew` is issued for that
   job, and the job context is cancelled immediately with cause `ErrLeaseLost`:
   `errors.Is(context.Cause(jobCtx), ErrLeaseLost)`. The cause is
@@ -137,7 +150,9 @@ questions, not requirements.
    and how do you guarantee that no `Renew` is running after `Complete` starts
    and no `Complete` happens after the lease was lost?
 2. What is the local lease deadline, why is it measured from when a call was
-   issued, and what enforces it while a `Renew` call hangs?
+   issued, and what enforces it while a `Renew` call hangs? What happens to a
+   `Renew` whose success arrives exactly at the deadline, and to one whose
+   success arrives after the handler was cancelled?
 3. Which contexts exist (`Run`'s `ctx`, the job context, the context of each
    store call), who cancels each one, and with which cause?
 4. A handler ignores its context after the lease is lost and keeps writing to

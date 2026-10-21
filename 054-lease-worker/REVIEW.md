@@ -58,6 +58,12 @@
   whose store wraps the error.
 - **A fenced `Complete` (`ErrLeaseLost`) stops the loop or is reported as a
   generic error.** Caught by `TestCompleteLeaseLostIsReportedAndRunContinues`.
+- **A `Renew` success that is already in hand when the deadline timer fires is
+  discarded,** so a lease the store confirmed is abandoned and the job waits
+  out the extended lease before anyone redoes it. Not caught by the tests (no
+  test has a `Renew` succeeding at the deadline); look for it in review:
+  typically a `select` whose deadline branch never looks at a result that is
+  already available.
 - **Unstopped tickers and timers** (`time.Tick`, a ticker or `AfterFunc` never
   stopped). Not caught by the tests; look for it in review.
 
