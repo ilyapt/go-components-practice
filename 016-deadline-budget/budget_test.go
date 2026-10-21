@@ -80,6 +80,7 @@ func TestValidation(t *testing.T) {
 			{name: "reserve equals total", ctx: context.Background(), cfg: Config{Total: time.Second, Reserve: time.Second}, wantErr: ErrInvalidConfig},
 			{name: "reserve exceeds total", ctx: context.Background(), cfg: Config{Total: time.Second, Reserve: 2 * time.Second}, wantErr: ErrInvalidConfig},
 			{name: "reserve plus min step exceeds total", ctx: context.Background(), cfg: Config{Total: time.Second, Reserve: 600 * time.Millisecond, MinStep: 500 * time.Millisecond}, wantErr: ErrInvalidConfig},
+			{name: "reserve plus min step overflows", ctx: context.Background(), cfg: Config{Total: time.Duration(1<<63 - 1), Reserve: time.Duration(1<<63 - 2), MinStep: 2}, wantErr: ErrInvalidConfig},
 			{name: "reserve plus min step equals total", ctx: context.Background(), cfg: Config{Total: time.Second, Reserve: 500 * time.Millisecond, MinStep: 500 * time.Millisecond}},
 			{name: "parent deadline only", ctx: withDeadline, cfg: Config{}},
 			{name: "parent deadline only, reserve not checked against it", ctx: withDeadline, cfg: Config{Reserve: time.Second, MinStep: time.Second}},
@@ -98,6 +99,29 @@ func TestValidation(t *testing.T) {
 				t.Errorf("%s: New returned a non-nil budget with an error", tc.name)
 			}
 		}
+	})
+}
+
+func TestDurationsLargerThanMaxInt32AreNotNarrowed(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		start := time.Now()
+		b := mustNew(t, context.Background(), Config{
+			Total:   10 * time.Second,
+			Reserve: time.Second,
+		})
+
+		assertRemaining(t, b, 9*time.Second, "at creation")
+
+		limited, cancelLimited := mustStep(t, b, context.Background(), 5*time.Second)
+		assertDeadline(t, limited, start, 5*time.Second, "step limit above MaxInt32 nanoseconds")
+		cancelLimited()
+
+		uncapped, cancelUncapped := mustStep(t, b, context.Background(), 0)
+		assertDeadline(t, uncapped, start, 9*time.Second, "remaining budget above MaxInt32 nanoseconds")
+		cancelUncapped()
+
+		time.Sleep(3 * time.Second)
+		assertRemaining(t, b, 6*time.Second, "after wall-clock time passed")
 	})
 }
 

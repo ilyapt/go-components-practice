@@ -45,6 +45,13 @@
 - **`Step` reads the clock twice, once for admission and once for the deadline, so with a real
   clock a step admitted with exactly `MinStep` is granted slightly less.** Not caught by the tests
   (virtual time does not move inside a call); look for it in review.
+- **`Reserve + MinStep > Total` evaluated as a plain sum overflows for durations near
+  `math.MaxInt64`, so an invalid configuration is accepted.** Caught by `TestValidation` ("reserve
+  plus min step overflows").
+- **Durations are narrowed somewhere (an `int32` or `float32` bound, for example while guarding
+  against the overflow above), so every value above about 2.1s is truncated.** Caught by
+  `TestDurationsLargerThanMaxInt32AreNotNarrowed`; it is a regression test for a bug that actually
+  happened, every other test uses durations below that bound.
 
 ## Open choices
 
